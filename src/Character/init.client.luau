@@ -1,16 +1,11 @@
-local FrictonDeltaModifier = 1
-local DefaultFriction = 4
-local RampsStepnessCriteria = 0.1
-local MaxSpeed = 150
-local MinSpeed = 15
+local MaxSpeed = 300
+local MinSpeed = 5
+local RampStepness = 0.1
+local GroundFriction = 0.995
+local RampFriction = 0.98
 
-
--- THESE ARE DEBUG VALUES DONT USE THEM IN GAME \/  gg
-local FrictionDB
---THESE ARE DEBUG VALUES DONT USE THEM IN GAME /\
 
 local UserInput = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
 
 local Player = game.Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
@@ -19,12 +14,13 @@ local Human = Character:WaitForChild("Humanoid")
 local Animation = Character:WaitForChild("Animate")
 
 local animation = Character:WaitForChild("AnimSaves"):FindFirstChild("Slide")
-local Slides = Human:LoadAnimation(animation)
+local SlidesAnim = Human:LoadAnimation(animation)
 
-
-local Debounce = false
 local Stop = false
-local HumanSpeed = 40
+local Debounce = false
+local HumanSpeed = Human.WalkSpeed
+Animation.Enabled = false
+
 
 --Inital logic
 local ListOfExecptions = {}
@@ -37,19 +33,6 @@ params.FilterDescendantsInstances = ListOfExecptions
 params.FilterType = Enum.RaycastFilterType.Exclude
 --Inital logic
 
-local function SlidingSpeedMath(t, InitialForce, Friction)
-    if Friction == nil then
-        Friction = DefaultFriction
-    end
-
-    local f = math.exp(-FrictonDeltaModifier*Friction*t) * InitialForce
-
-    if f > MaxSpeed then
-        return MaxSpeed
-    else
-        return f
-    end
-end
 
 local function RayCastCheck()
     local Origin = Vector3.new(HumanRootPart.Position.X, HumanRootPart.Position.Y, HumanRootPart.Position.Z)
@@ -59,120 +42,88 @@ local function RayCastCheck()
 end
 
 
-local function RampSlideFrictionCalculations(RecentYvectorMovement)
-    if RecentYvectorMovement < -0.5 then
-        RecentYvectorMovement = -0.5
-    end
-    --print(RecentYvectorMovement)
-    if RecentYvectorMovement > RampsStepnessCriteria then --When you go Up a ramp
-        --print("virsu")
-        return 10
-
-    elseif RecentYvectorMovement < -1*RampsStepnessCriteria then --When you go Down a ramp
-        --print("apacia")
-        return RecentYvectorMovement * 8
-
+local function SpeedModifier(Y)
+    
+    if Y > RampStepness and Y > 0 then
+        return GroundFriction
+    elseif Y < 0 and Y < RampStepness then
+        local x = RampStepness / 8
+        return 1 + x
     else
-        return 2  --When you go Don't go on a ramp
+        return RampFriction
     end
 end
 
-local function Slide()
-    HumanSpeed = Human.WalkSpeed
 
-
-    Animation.Enabled = false
-    Debounce = true
-    Slides:Play()
-    Slides.Looped = true
-    HumanRootPart.Transparency = 0
-
-    -- !!!!FOR SHOWCASE FIXX IS NEEDED!!!!
+local function StartSlide() 
+    Human.WalkSpeed = 0
+    SlidesAnim:Play()
     for _, v in pairs(HumanRootPart.Parent:GetDescendants()) do
         if (v:IsA("MeshPart") or v:IsA("MeshPart")) and v ~= HumanRootPart then
             v.CanCollide = false
         end
     end 
+end
+local function EndSlide() 
+    Stop = true
+    Debounce = false
+    Human.WalkSpeed = HumanSpeed
+    SlidesAnim:Stop()
+end
 
-    local Attachment = Instance.new("Attachment") --Creating attachment
+
+
+local function Slide()
+
+    StartSlide()
+    local ControlVector = workspace.CurrentCamera.CFrame.RightVector
+    print(HumanRootPart.Position)
+    HumanRootPart.CFrame = CFrame.lookAt(HumanRootPart.Position, workspace.CurrentCamera.CFrame.LookVector * Vector3.new(1,0,1))
+    local Speed = Character.PrimaryPart.AssemblyLinearVelocity.Magnitude
+    local Attachment = Instance.new("Attachment") --sukuriam Suda
     Attachment.Parent = HumanRootPart
-    local VectorForce = Instance.new("VectorForce") --Creating VectorForce
-    VectorForce.Parent = HumanRootPart
-    VectorForce.Attachment0 = Attachment
-    VectorForce.RelativeTo = "World"   
-    -- !!!!FOR SHOWCASE FIXX IS NEEDED!!!!
 
-    local LookVector = Workspace.CurrentCamera.CFrame.LookVector      --Make LookVector Camera
-    --local LookVector = HumanRootPart.CFrame.LookVector              --Make LookVector Human looking pos
-    LookVector = LookVector * Vector3.new(1,0,1)
+    local LinearVelocity = Instance.new("LinearVelocity") --sukuriam Suda
+    LinearVelocity.Parent = HumanRootPart
+    LinearVelocity.Attachment0 = Attachment
+    LinearVelocity.RelativeTo = "World"
+    LinearVelocity.MaxForce = math.huge
 
-    local t = 0
+
     Stop = false
+    while Stop == false do 
+        if MinSpeed < Speed then
+            local RayCastResult = RayCastCheck()
+            if RayCastResult ~= nil then
 
-    local InitialSpeedVector = Character.PrimaryPart.AssemblyLinearVelocity * Vector3.new(1,0,1)
+                local ForwardsVector = RayCastResult.Normal:Cross(ControlVector)
+                LinearVelocity.VectorVelocity = Speed * ForwardsVector
 
-    Human.WalkSpeed = 0
-    
-    local OldPos = HumanRootPart.CFrame.Position
-    local MovingDownWords = false
-    while Stop == false do
-        t = t + 0.005
+                if Speed <= MaxSpeed then
+                    Speed = Speed * SpeedModifier(ForwardsVector.Y)
+                else 
+                    Speed = Speed
+                end
 
-        local NewPOS = HumanRootPart.CFrame.Position
-        local RecentMovementVector = (NewPOS - OldPos)
-    
-        local CharacterVelocity = LookVector * SlidingSpeedMath(t, InitialSpeedVector.Magnitude, RampSlideFrictionCalculations(RecentMovementVector.Y))
+                print(Speed)
 
-        local OldMovingDownWorlds = MovingDownWords
-        if RecentMovementVector.Y < -1 then
-            MovingDownWords = true
-        else
-            MovingDownWords = false
-        end
-
-        if OldMovingDownWorlds == true and MovingDownWords == false then
-            print("We changed the speed")
-            t = 0
-            InitialSpeedVector = CharacterVelocity * 100
-        end
-
-
-
-        if RayCastCheck() ~= nil and CharacterVelocity.Magnitude > MinSpeed then
-            VectorForce.Force = Vector3.new(0,-1,0)  * 50000    --Adding vector/force to VectorForce soo player would be stuck on a ramp !!!!FOR SHOWCASE FIXX IS NEEDED!!!!
-            FrictionDB = RampSlideFrictionCalculations(RecentMovementVector.Y) -- !!!!FOR SHOWCASE FIXX IS NEEDED!!!!
-
-            if RecentMovementVector.Y < -0.3 then
-                Character.PrimaryPart.AssemblyLinearVelocity = CharacterVelocity + Vector3.new(0,RecentMovementVector.Y - 100, 0)
+                wait(0.01)
             else
-                Character.PrimaryPart.AssemblyLinearVelocity = CharacterVelocity
+                wait(0.05)
+                Stop = true
             end
-
         else
-            --print("Stopped")
-            Character.PrimaryPart.AssemblyLinearVelocity = Vector3.new(0,0,0) -- Making Charracter stop after it's speed decreases
             Stop = true
         end
-        wait(0.001)
-        OldPos = NewPOS
     end
 
-    Slides:Stop()
-
-    -- !!!!FOR SHOWCASE FIXX IS NEEDED!!!!
-    VectorForce.Parent = nil --Cleaning up
-    Attachment.Parent = nil
-    -- !!!!FOR SHOWCASE FIXX IS NEEDED!!!!
+    Attachment.Parent = nil -- cleaning up
+    LinearVelocity.Parent = nil
+    --Character.PrimaryPart.AssemblyLinearVelocity = HumanRootPart.CFrame.lookVector * Speed
+    EndSlide() 
 end
 
-Animation.Enabled = false
 
-local function EndSlide() 
-    --Animation.Enabled = true   -- !!!!FOR SHOWCASE FIXX IS NEEDED!!!!
-    Debounce = false
-    Stop = true
-    Human.WalkSpeed = HumanSpeed
-end
 
 UserInput.InputBegan:Connect(function(input) -- Getting Input and checking if its LeftShift
     if input.KeyCode == Enum.KeyCode.LeftShift then
@@ -191,8 +142,3 @@ UserInput.InputEnded:Connect(function(input)
         EndSlide()
     end
 end)
-
-while false do
-    print("Speed: ", Character.PrimaryPart.AssemblyLinearVelocity.Magnitude, " Friction = ", FrictionDB)
-    wait(0.2)
-end
