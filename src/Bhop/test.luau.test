@@ -1,0 +1,129 @@
+local UserInput = game:GetService("UserInputService")
+local Player = game.Players.LocalPlayer
+local PlayerModule = require(Player.PlayerScripts:WaitForChild("PlayerModule"))
+local Controls = PlayerModule:GetControls();
+Controls:Enable()
+
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local HumanRootPart = Character:WaitForChild("HumanoidRootPart")  --Self explanitory
+local Human = Character:WaitForChild("Humanoid")
+
+local Debounce = false
+
+--Inital logic
+local ListOfExecptions = {}
+for _, v in pairs(HumanRootPart.Parent:GetDescendants()) do
+    table.insert(ListOfExecptions, v)
+end
+for _, v in pairs(HumanRootPart:GetDescendants()) do
+    table.insert(ListOfExecptions, v)
+end
+
+local params = RaycastParams.new()
+params.FilterDescendantsInstances = ListOfExecptions
+params.FilterType = Enum.RaycastFilterType.Exclude
+--Inital logic
+
+local function RayCastCheck(Vector)
+    local Origin = Vector3.new(HumanRootPart.Position.X, HumanRootPart.Position.Y, HumanRootPart.Position.Z)
+    local Direction = Vector
+
+    return workspace:Raycast(Origin, Direction, params)
+end
+
+local function StartStraife() 
+    Stop = false
+    Debounce = true
+    Human.AutoRotate = false
+    --Controls:Disable()
+    for _, v in pairs(HumanRootPart.Parent:GetDescendants()) do --Disable all cooligions
+        if (v:IsA("MeshPart") or v:IsA("Part")) and v ~= HumanRootPart then
+            v.CanCollide = false
+            v.Massless = true
+        end
+    end 
+end
+local function EndStraife() 
+    Stop = true
+    Debounce = false
+    --Controls:Enable()
+    Human.AutoRotate = true
+end
+
+local function Straife()
+    StartStraife()
+    local SpeedMultiplayer  = 0 -- dont know if we are going to use
+    local SpeedVector  = Vector3.zero
+    
+    local RotationMovementPart = Instance.new("Part")
+    RotationMovementPart.CanCollide = false
+    RotationMovementPart.Parent = HumanRootPart
+    RotationMovementPart.Position = HumanRootPart.Position
+    RotationMovementPart.Transparency = 0
+
+    local HumanAttachment = Instance.new("Attachment")
+    HumanAttachment.Parent = HumanRootPart
+
+    local PartAttachment = Instance.new("Attachment")
+    PartAttachment.Parent = RotationMovementPart
+
+    local AlignOrientation = Instance.new("AlignOrientation")
+    AlignOrientation.Parent = RotationMovementPart
+    AlignOrientation.Responsiveness = 50
+    AlignOrientation.Attachment0 = HumanAttachment
+    AlignOrientation.Attachment1 = PartAttachment
+
+    -- local AlignPosition = Instance.new("AlignPosition")
+    -- AlignPosition.Parent = RotationMovementPart
+    -- AlignPosition.Responsiveness = 100
+    -- AlignPosition.Attachment0 = HumanAttachment
+    -- AlignPosition.Attachment1 = PartAttachment
+
+
+    local VectorForce = Instance.new("VectorForce")
+    VectorForce.Attachment0 = HumanAttachment
+    VectorForce.Parent = HumanRootPart
+
+    while Stop == false do
+        print("true")
+        Human.AutoRotate = false
+        RotationMovementPart.CFrame = CFrame.lookAt( HumanRootPart.Position,  HumanRootPart.Position + (workspace.CurrentCamera.CFrame.LookVector * Vector3.new(1,0,1)))
+
+        local Mag = (RotationMovementPart.CFrame.LookVector - HumanAttachment.CFrame.LookVector).Magnitude
+
+        if (Mag > 0.1 or Mag < -0.1) and UserInput:IsKeyDown(Enum.KeyCode.Space) then
+            if UserInput:IsKeyDown(Enum.KeyCode.A) or UserInput:IsKeyDown(Enum.KeyCode.D) then
+                VectorForce.Force = HumanAttachment.CFrame.LookVector * 500
+                print((RotationMovementPart.CFrame.LookVector - HumanAttachment.CFrame.LookVector).Magnitude)
+            else
+                VectorForce.Force = Vector3.zero
+            end
+        else
+            VectorForce.Force = Vector3.zero
+        end
+
+        wait(0.01)
+    end
+
+    HumanAttachment.Parent = nil
+    PartAttachment.Parent = nil
+    VectorForce.Parent = nil
+    RotationMovementPart.Parent = nil
+    AlignOrientation.Parent = nil  
+
+    EndStraife()
+end
+
+
+UserInput.InputBegan:Connect(function(input) -- Getting Input and checking if its LeftControl
+    if input.KeyCode == Enum.KeyCode.Space and Debounce == false then
+        Straife()
+        Debounce = false
+    end
+end)
+
+UserInput.InputEnded:Connect(function(input) 
+    if input.KeyCode == Enum.KeyCode.Space then
+        EndStraife()
+    end
+end)

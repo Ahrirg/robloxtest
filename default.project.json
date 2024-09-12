@@ -25,6 +25,12 @@
       "StarterCharacterScripts": {
         "Character": {
           "$path": "src/Character"
+        },
+        "Bhop": {
+          "$path": "src/Bhop"
+        },
+        "Surf": {
+          "$path": "src/Surf"
         }
       }
     },
